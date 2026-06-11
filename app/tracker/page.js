@@ -42,9 +42,6 @@ export default function TrackerPage() {
   const chatEndRef = useRef(null);
   const chatSubRef = useRef(null);
 
-  const searchParams = useSearchParams();
-const orderId = searchParams.get('order');
-
   const showToastMsg = useCallback((msg, kind = '') => {
     setToast({ msg, kind });
     setTimeout(() => setToast(null), 3500);
