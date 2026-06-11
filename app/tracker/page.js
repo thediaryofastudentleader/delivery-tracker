@@ -1,19 +1,7 @@
 'use client';
-'use client';
-import { useSearchParams } from 'next/navigation';
-
-// Remove: export const dynamic = 'force-dynamic';
-
-export default function TrackerPage() {
-  const searchParams = useSearchParams();
-  const orderId = searchParams.get('order');
-  
-  // Now orderId will be null initially, then populated correctly
-  // without hydration mismatches
-}
-
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 
 const STATUS_STEPS = [
@@ -36,6 +24,8 @@ const BANK_DETAILS = {
 };
 
 export default function TrackerPage() {
+  const searchParams = useSearchParams();
+  const orderId = searchParams.get('order');
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -52,7 +42,8 @@ export default function TrackerPage() {
   const chatEndRef = useRef(null);
   const chatSubRef = useRef(null);
 
-  const orderId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('order') : '';
+  const searchParams = useSearchParams();
+const orderId = searchParams.get('order');
 
   const showToastMsg = useCallback((msg, kind = '') => {
     setToast({ msg, kind });
