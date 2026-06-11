@@ -1,5 +1,16 @@
 'use client';
-export const dynamic = 'force-dynamic';
+'use client';
+import { useSearchParams } from 'next/navigation';
+
+// Remove: export const dynamic = 'force-dynamic';
+
+export default function TrackerPage() {
+  const searchParams = useSearchParams();
+  const orderId = searchParams.get('order');
+  
+  // Now orderId will be null initially, then populated correctly
+  // without hydration mismatches
+}
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
