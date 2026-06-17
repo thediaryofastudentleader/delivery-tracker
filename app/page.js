@@ -6,12 +6,16 @@ import { useRouter } from 'next/navigation';
 import {
   ShoppingCart, Moon, Sun, Package, Flame, Heart, Home, UserCircle, Bell
 } from 'lucide-react';
+import { supabase } from '@/lib/supabaseClient';
 
 import IntroSplash from './components/IntroSplash';
 import StoreHeader from './components/StoreHeader';
 import HeroSection from './components/HeroSection';
 import ProductSection from './components/ProductSection';
 import StoreOverlays from './components/StoreOverlays';
+import MegaShoppingBanner from './components/MegaShoppingBanner';
+import SpinWheel from './components/SpinWheel';
+import CashPassCodeCard from './components/CashPassCodeCard';
 
 export const products = [
   { id:'p1', title:'Toppers (125g)', price:13.99, flavour:'Raspberry/chocolate', stock:20, image:'/pictures/biscuit.jpeg', category:'snacks' },
@@ -37,20 +41,31 @@ export function getGreeting() {
   return 'Good Evening 🌙';
 }
 
-// 🤖 Buy 10 Get 2 Free: returns free quantity for an item
 export function getFreeQty(qty) {
   return Math.floor(qty / 10) * 2;
 }
 
-// 💰 Bulk discount: 10% off orders over R200
 export function getBulkDiscount(subtotal) {
   return subtotal > 200 ? subtotal * 0.10 : 0;
 }
 
-// 🚚 Delivery fee: R5 lower campus, R10 upper campus if subtotal < R50
 export function getDeliveryFee(subtotal, location) {
   if (subtotal >= 50) return 0;
   return location === 'upper' ? 10 : 5;
+}
+
+// 💎 CPC Helpers
+function generateCPC(name, category) {
+  const letters = name.toLowerCase().replace(/[^a-z]/g, '').slice(0, 3);
+  const random = Math.floor(100 + Math.random() * 900);
+  return `${letters}${random}#YA${category}`;
+}
+
+function getPointsValue(rands) {
+  if (rands >= 20) return 1200;
+  if (rands >= 10) return 600;
+  if (rands >= 5) return 300;
+  return 0;
 }
 
 export default function HomePage() {
@@ -90,6 +105,13 @@ export default function HomePage() {
   const [chatUsername, setChatUsername] = useState('');
   const [showLoginModal, setShowLoginModal] = useState(false);
 
+  // 💎 NEW CPC STATES
+  const [cashPassCode, setCashPassCode] = useState('');
+  const [cpcData, setCpcData] = useState(null);
+  const [megaShopping, setMegaShopping] = useState(false);
+  const [showCPCInput, setShowCPCInput] = useState(false);
+  const [pointsDiscount, setPointsDiscount] = useState(0);
+
   useEffect(() => {
     setMounted(true);
     const savedDark = localStorage.getItem('vc_dark_mode') === 'true';
@@ -111,6 +133,13 @@ export default function HomePage() {
     if (savedUsername) setChatUsername(savedUsername);
     const introShown = sessionStorage.getItem('intro_shown');
     if (introShown) setShowIntro(false);
+
+    // Load saved CPC
+    const savedCPC = localStorage.getItem('vc_cpc');
+    if (savedCPC) {
+      setCashPassCode(savedCPC);
+      validateCPC(savedCPC);
+    }
   }, []);
 
   useEffect(() => { if (!mounted) return; localStorage.setItem('vc_dark_mode', dark.toString()); if (dark) document.documentElement.classList.add('dark'); else document.documentElement.classList.remove('dark'); }, [dark, mounted]);
@@ -149,6 +178,113 @@ export default function HomePage() {
     }, 4000);
     return () => clearInterval(interval);
   }, []);
+
+  // 💎 CPC VALIDATION
+  const validateCPC = async (code) => {
+    if (!code || !supabase) return;
+    const cleanCode = code.toLowerCase().trim();
+    const { data, error } = await supabase
+      .from('cash_pass_codes')
+      .select('*')
+      .eq('code', cleanCode)
+      .single();
+    if (data && data.is_active) {
+      // Fetch points
+      const { data: points } = await supabase
+        .from('customer_points')
+        .select('*')
+        .eq('cpc_code', cleanCode)
+        .single();
+      const enriched = { ...data, points: points || { points_balance: 0 } };
+      setCpcData(enriched);
+      setMegaShopping(true);
+      localStorage.setItem('vc_cpc', cleanCode);
+      // Calculate auto points discount if >300
+      if (points && points.points_balance >= 300) {
+        const discountRands = Math.floor(points.points_balance / 300) * 5;
+        setPointsDiscount(discountRands);
+      } else {
+        setPointsDiscount(0);
+      }
+    } else {
+      setCpcData(null);
+      setMegaShopping(false);
+      setPointsDiscount(0);
+      if (code) alert('Invalid or inactive Cash Pass Code');
+    }
+  };
+
+  // 💎 DETERMINE CATEGORY BASED ON ORDER HISTORY
+  const determineCategory = async (phone, email, name) => {
+    if (!supabase) return 4;
+    const { data: orders } = await supabase
+      .from('orders')
+      .select('total, payment_method')
+      .or(`phone.eq.${phone},email.eq.${email}`)
+      .order('created_at', { ascending: false });
+    if (!orders || orders.length === 0) return 4;
+    const totalOrders = orders.length;
+    const hasBigOrder = orders.some(o => o.total > 50);
+    const hasCashOrder = orders.some(o => o.payment_method === 'Cash on Delivery');
+    if (totalOrders >= 3) return 2;
+    if (totalOrders >= 2 && hasBigOrder) return 1;
+    if (hasBigOrder) return 3;
+    if (hasCashOrder && totalOrders === 1) return 4;
+    return 4;
+  };
+
+  // 💎 CREATE OR UPDATE CPC
+  const ensureCPC = async (name, email, phone) => {
+    if (!supabase || !name || !phone) return null;
+    const existingCode = localStorage.getItem('vc_cpc');
+    if (existingCode) {
+      // Check if exists in DB
+      const { data: existing } = await supabase
+        .from('cash_pass_codes')
+        .select('*')
+        .eq('code', existingCode)
+        .single();
+      if (existing) {
+        // Update category if changed
+        const newCat = await determineCategory(phone, email, name);
+        if (newCat !== existing.category) {
+          await supabase
+            .from('cash_pass_codes')
+            .update({ category: newCat, total_orders: existing.total_orders + 1 })
+            .eq('code', existingCode);
+          // Send email about upgrade (placeholder)
+          console.log(`CPC upgraded from ${existing.category} to ${newCat} for ${existingCode}`);
+        }
+        return existingCode;
+      }
+    }
+    // Generate new CPC
+    const category = await determineCategory(phone, email, name);
+    const newCode = generateCPC(name, category);
+    const { error } = await supabase.from('cash_pass_codes').insert({
+      code: newCode,
+      customer_name: name,
+      email: email,
+      phone: phone,
+      category: category,
+      total_orders: 1,
+      is_active: true
+    });
+    if (!error) {
+      // Create points record
+      await supabase.from('customer_points').insert({
+        cpc_code: newCode,
+        points_balance: 0,
+        total_earned: 0,
+        total_redeemed: 0
+      });
+      localStorage.setItem('vc_cpc', newCode);
+      // Send email with CPC (placeholder — integrate SendGrid/Resend here)
+      console.log('New CPC emailed:', newCode, 'to', email);
+      return newCode;
+    }
+    return null;
+  };
 
   const getDiscountedPrice = (productId, originalPrice) => {
     if (!hotSale?.active) return originalPrice;
@@ -220,14 +356,33 @@ export default function HomePage() {
   const bulkDiscount = getBulkDiscount(cartSubtotal);
   const discountedSubtotal = cartSubtotal - bulkDiscount;
   const deliveryFee = getDeliveryFee(discountedSubtotal, formData.location);
-  const cartTotal = discountedSubtotal + deliveryFee + tipAmount;
+  const prePointsTotal = discountedSubtotal + deliveryFee + tipAmount;
+  const finalPointsDiscount = megaShopping && cpcData?.points?.points_balance >= 300
+    ? Math.floor(cpcData.points.points_balance / 300) * 5
+    : 0;
+  const cartTotal = Math.max(0, prePointsTotal - finalPointsDiscount);
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
   const likedProducts = products.filter(p => liked.includes(p.id));
   const featuredProducts = products.filter(p => p.trending || p.special || p.new);
   const hasBulkPromo = cart.some(i => i.qty >= 10);
 
+  // 💎 COD ALLOWANCE
+  const allowCOD = cartTotal <= 50 || (megaShopping && cpcData?.is_active);
+
   const finalizeOrder = async () => {
     const orderId = `YAF-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+    // 💎 Ensure CPC exists for this customer
+    let finalCPC = cashPassCode;
+    if (!finalCPC && formData.name && formData.phone) {
+      finalCPC = await ensureCPC(formData.name, formData.email, formData.phone);
+    }
+
+    // 💎 Calculate points earned (10 per order)
+    const pointsEarned = 10;
+    // Calculate points used
+    const pointsUsed = finalPointsDiscount > 0 ? Math.floor(finalPointsDiscount / 5) * 300 : 0;
+
     const orderData = {
       order_id: orderId,
       customer_name: formData.name,
@@ -247,6 +402,12 @@ export default function HomePage() {
       status: 'order_received',
       status_history: [{ status: 'order_received', time: new Date().toISOString() }],
       paid: false,
+      cash_pass_code: finalCPC,
+      points_earned: pointsEarned,
+      points_used: pointsUsed,
+      payment_status: cartTotal > 50 && ['EFT / PayShap', 'Online Payment', 'Scan to Pay'].includes(formData.pay)
+        ? 'pending'
+        : (formData.pay === 'Cash on Delivery' ? 'pay_driver' : 'pending')
     };
 
     setLoading(true);
@@ -260,20 +421,64 @@ export default function HomePage() {
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
-      if (!res.ok) { 
-        const text = await res.text(); 
+      if (!res.ok) {
+        const text = await res.text();
         console.error('Server error response:', text);
-        throw new Error(`Server error ${res.status}: ${text}`); 
+        throw new Error(`Server error ${res.status}: ${text}`);
       }
       await res.json();
+
+      // 💎 Update points in DB
+      if (finalCPC && supabase) {
+        const { data: pointsRow } = await supabase
+          .from('customer_points')
+          .select('*')
+          .eq('cpc_code', finalCPC)
+          .single();
+        if (pointsRow) {
+          const newBalance = pointsRow.points_balance + pointsEarned - pointsUsed;
+          await supabase.from('customer_points').update({
+            points_balance: Math.max(0, newBalance),
+            total_earned: pointsRow.total_earned + pointsEarned,
+            total_redeemed: pointsRow.total_redeemed + pointsUsed,
+            last_purchase_date: new Date().toISOString()
+          }).eq('cpc_code', finalCPC);
+        }
+        // Record transaction
+        await supabase.from('points_transactions').insert({
+          cpc_code: finalCPC,
+          order_id: orderId,
+          points: pointsEarned,
+          type: 'earn',
+          description: 'Order completion bonus'
+        });
+        if (pointsUsed > 0) {
+          await supabase.from('points_transactions').insert({
+            cpc_code: finalCPC,
+            order_id: orderId,
+            points: -pointsUsed,
+            type: 'redeem',
+            description: 'Points redeemed for discount',
+            rands_equivalent: finalPointsDiscount
+          });
+        }
+      }
+
       setOrderPlaced(true);
       setTrackOrderId(orderId);
       setCart([]);
       localStorage.setItem('vc_cart', '[]');
-      // 🚀 Fast redirect to tracker
-      setTimeout(() => {
-        router.push(`/tracker?order=${orderId}`);
-      }, 800);
+
+      // 💎 Redirect logic
+      if (cartTotal > 50 && ['EFT / PayShap', 'Online Payment', 'Scan to Pay'].includes(formData.pay)) {
+        setTimeout(() => {
+          router.push(`/bank-confirm?order=${orderId}`);
+        }, 800);
+      } else {
+        setTimeout(() => {
+          router.push(`/tracker?order=${orderId}`);
+        }, 800);
+      }
     } catch (err) {
       console.error('Order error:', err);
       if (err.name === 'AbortError') {
@@ -289,7 +494,13 @@ export default function HomePage() {
     if (cart.length === 0) { alert("Cart is empty!"); return; }
     if (!campusConfirmed) { alert("Please confirm you are on campus!"); return; }
 
-    const isOnlinePayment = ['EFT / PayShap', 'Online Payment'].includes(formData.pay);
+    // 💎 COD restriction check
+    if (formData.pay === 'Cash on Delivery' && cartTotal > 50 && !megaShopping) {
+      alert("Cash on Delivery is only available for orders under R50 or with a valid Cash Pass Code.");
+      return;
+    }
+
+    const isOnlinePayment = ['EFT / PayShap', 'Online Payment', 'Scan to Pay'].includes(formData.pay);
     const needsBankDetails = cartTotal > 50 && isOnlinePayment;
 
     if (needsBankDetails) {
@@ -368,6 +579,15 @@ export default function HomePage() {
       />
 
       <main style={{ maxWidth: 480, margin: '0 auto', padding: '80px 16px 100px' }}>
+        {/* 💎 Mega Shopping / Normal Banner */}
+        <MegaShoppingBanner dark={dark} cpcData={cpcData} megaShopping={megaShopping} />
+
+        {/* 💎 CPC Card (if active) */}
+        {megaShopping && <CashPassCodeCard cpcData={cpcData} />}
+
+        {/* 💎 Spin & Win (Tue/Fri afternoons) */}
+        <SpinWheel cpcCode={cashPassCode} orderTotal={cartTotal} dark={dark} />
+
         <HeroSection
           dark={dark} hotSale={hotSale} featuredProducts={featuredProducts}
           featuredIndex={featuredIndex} setFeaturedIndex={setFeaturedIndex}
@@ -403,6 +623,10 @@ export default function HomePage() {
         showLoginModal={showLoginModal} setShowLoginModal={setShowLoginModal}
         handleLogin={handleLogin} openChat={openChat} chatUsername={chatUsername}
         activeTab={activeTab} setActiveTab={setActiveTab} cartCount={cartCount} liked={liked}
+        // 💎 NEW PROPS
+        cashPassCode={cashPassCode} setCashPassCode={setCashPassCode}
+        cpcData={cpcData} megaShopping={megaShopping} validateCPC={validateCPC}
+        pointsDiscount={finalPointsDiscount} allowCOD={allowCOD}
       />
     </div>
   );
