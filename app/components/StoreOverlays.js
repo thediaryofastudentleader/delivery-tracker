@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import {
   ShoppingCart, X, Minus, Plus, Heart, Home, Package,
-  MessageCircle, UserCircle, CheckCircle, CreditCard, Banknote, Smartphone
+  MessageCircle, UserCircle, CheckCircle, CreditCard, Banknote, Smartphone, Zap
 } from 'lucide-react';
 
 const BANK_DETAILS = {
@@ -28,7 +28,10 @@ export default function StoreOverlays({
   campusConfirmed, setCampusConfirmed,
   showLiked, setShowLiked, likedProducts, addToCart, getDiscountedPrice,
   showLoginModal, setShowLoginModal, handleLogin, openChat, chatUsername,
-  activeTab, setActiveTab, cartCount, liked
+  activeTab, setActiveTab, cartCount, liked,
+  // NEW CPC PROPS
+  cashPassCode, setCashPassCode, cpcData, megaShopping, validateCPC,
+  pointsDiscount, allowCOD
 }) {
   return (
     <>
@@ -165,10 +168,22 @@ export default function StoreOverlays({
                       <span style={{ color: dark ? '#fff' : '#0f172a' }}>R{deliveryFee.toFixed(2)}</span>
                     </div>
                   )}
+                  {deliveryFee === 0 && cartSubtotal > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13, color: '#10b981' }}>
+                      <span>🚚 Delivery</span>
+                      <span style={{ fontWeight: 700 }}>FREE (R50+ order)</span>
+                    </div>
+                  )}
                   {tipAmount > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13, color: dark ? '#94a3b8' : '#64748b' }}>
                       <span>💚 Tip</span>
                       <span style={{ color: dark ? '#fff' : '#0f172a' }}>R{tipAmount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {pointsDiscount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13, color: '#3b82f6' }}>
+                      <span>💎 Points Discount</span>
+                      <span style={{ fontWeight: 700 }}>-R{pointsDiscount.toFixed(2)}</span>
                     </div>
                   )}
                   <div style={{ borderTop: dark ? '1px solid rgba(71, 85, 105, 0.5)' : '1px solid rgba(203, 213, 225, 0.5)', marginTop: 8, paddingTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 800 }}>
@@ -210,6 +225,17 @@ export default function StoreOverlays({
               <button onClick={() => setCheckoutOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: dark ? '#94a3b8' : '#64748b' }}>
                 <X size={24} />
               </button>
+            </div>
+
+            {/* MEGA / NORMAL Shopping Indicator */}
+            <div style={{
+              marginBottom: 16, padding: 12, borderRadius: 14,
+              background: megaShopping ? 'linear-gradient(135deg, #1e3a8a, #2563eb)' : (dark ? 'rgba(51,65,85,0.4)' : '#f1f5f9'),
+              color: megaShopping ? '#fff' : (dark ? '#94a3b8' : '#64748b'),
+              display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, fontWeight: 700
+            }}>
+              <span style={{ fontSize: 20 }}>{megaShopping ? '💎' : '💻'}</span>
+              {megaShopping ? `MEGA Shopping — CPC ${cpcData?.code} (Cat ${cpcData?.category})` : 'Normal Shopping — Enter CPC to unlock Mega Shopping'}
             </div>
 
             {showTip ? (
@@ -258,13 +284,60 @@ export default function StoreOverlays({
                 <input name="phone" type="tel" placeholder="Phone Number" required value={formData.phone} onChange={handleFormChange} style={inputStyle(dark)} />
                 <input name="address" placeholder="Res Name & Room Number" required value={formData.address} onChange={handleFormChange} style={inputStyle(dark)} />
 
-                {/* 🚚 Campus Location */}
+                {/* 🚚 Campus Location — ALWAYS REQUIRED */}
                 <div>
                   <label style={{ display: 'block', fontSize: 12, color: dark ? '#94a3b8' : '#64748b', marginBottom: 6, fontWeight: 500 }}>Campus Location</label>
                   <select name="location" value={formData.location} onChange={handleFormChange} style={selectStyle(dark)}>
                     <option value="lower">Lower Campus (R5 delivery if &lt; R50)</option>
                     <option value="upper">Upper Campus (R10 delivery if &lt; R50)</option>
                   </select>
+                </div>
+
+                {/* Delivery Fee Explanation */}
+                <div style={{
+                  padding: 12, borderRadius: 12,
+                  background: cartSubtotal >= 50 ? (dark ? 'rgba(16,185,129,0.15)' : '#f0fdf4') : (dark ? 'rgba(245,158,11,0.15)' : '#fffbeb'),
+                  border: cartSubtotal >= 50 ? '1px solid #10b981' : '1px solid #f59e0b'
+                }}>
+                  <p style={{ margin: 0, fontSize: 13, color: cartSubtotal >= 50 ? '#10b981' : '#f59e0b', fontWeight: 600 }}>
+                    {cartSubtotal >= 50
+                      ? '🎉 Delivery is FREE for orders over R50!'
+                      : `🚚 Delivery fee: R${deliveryFee} applies to orders under R50. Add R${(50 - cartSubtotal).toFixed(2)} more for FREE delivery!`}
+                  </p>
+                </div>
+
+                {/* 💎 Cash Pass Code Input */}
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, color: dark ? '#94a3b8' : '#64748b', marginBottom: 6, fontWeight: 500 }}>
+                    Cash Pass Code (Optional) — Unlock Mega Shopping & COD on large orders
+                  </label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input
+                      value={cashPassCode}
+                      onChange={(e) => setCashPassCode(e.target.value)}
+                      placeholder="e.g. geo683#YA2"
+                      style={{ ...inputStyle(dark), flex: 1, textTransform: 'lowercase' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => validateCPC(cashPassCode)}
+                      style={{
+                        padding: '14px 18px', borderRadius: 16, border: 'none',
+                        background: '#3b82f6', color: '#fff', fontWeight: 700, cursor: 'pointer'
+                      }}
+                    >
+                      Apply
+                    </button>
+                  </div>
+                  {megaShopping && cpcData && (
+                    <div style={{
+                      marginTop: 8, padding: 10, borderRadius: 10,
+                      background: 'linear-gradient(135deg, #1e3a8a, #3b82f6)',
+                      color: '#fff', fontSize: 12, fontWeight: 700
+                    }}>
+                      ✓ MEGA Shopping Active! Category {cpcData.category} • Points: {cpcData.points?.points_balance || 0}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -275,6 +348,16 @@ export default function StoreOverlays({
                     <option>Scan to Pay</option>
                     <option>Online Payment</option>
                   </select>
+                  {!allowCOD && formData.pay === 'Cash on Delivery' && (
+                    <p style={{ margin: '6px 0 0', fontSize: 12, color: '#ef4444', fontWeight: 600 }}>
+                      ❌ Cash on Delivery is only available for orders under R50 or with a valid Cash Pass Code.
+                    </p>
+                  )}
+                  {allowCOD && formData.pay === 'Cash on Delivery' && cartSubtotal > 50 && megaShopping && (
+                    <p style={{ margin: '6px 0 0', fontSize: 12, color: '#3b82f6', fontWeight: 600 }}>
+                      ✓ CPC approved — Cash on Delivery allowed for this order total.
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -319,10 +402,22 @@ export default function StoreOverlays({
                       <span style={{ color: dark ? '#fff' : '#0f172a' }}>R{deliveryFee.toFixed(2)}</span>
                     </div>
                   )}
+                  {deliveryFee === 0 && cartSubtotal >= 50 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13, color: '#10b981' }}>
+                      <span>🚚 Delivery</span>
+                      <span style={{ fontWeight: 700 }}>FREE</span>
+                    </div>
+                  )}
                   {tipAmount > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13, color: dark ? '#94a3b8' : '#64748b' }}>
                       <span>💚 Tip</span>
                       <span style={{ color: dark ? '#fff' : '#0f172a' }}>R{tipAmount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {pointsDiscount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13, color: '#3b82f6' }}>
+                      <span>💎 Points Discount</span>
+                      <span style={{ fontWeight: 700 }}>-R{pointsDiscount.toFixed(2)}</span>
                     </div>
                   )}
                   <div style={{ borderTop: dark ? '1px solid rgba(71, 85, 105, 0.5)' : '1px solid rgba(203, 213, 225, 0.5)', marginTop: 8, paddingTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 800 }}>
