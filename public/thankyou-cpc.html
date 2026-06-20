@@ -8,8 +8,15 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
   <script>
+    // Debug: log EmailJS init
+    console.log('EmailJS script loaded');
     (function() {
-      emailjs.init({ publicKey: "JgtLtbImFkKkMDJJR" });
+      try {
+        emailjs.init({ publicKey: "JgtLtbImFkKkMDJJR" });
+        console.log('✅ EmailJS initialized with publicKey');
+      } catch (e) {
+        console.error('❌ EmailJS init failed:', e);
+      }
     })();
   </script>
   <style>
@@ -25,6 +32,7 @@
     .btn-activate { background: linear-gradient(135deg, #10b981, #059669); font-size: 16px; padding: 16px 32px; }
     .btn-skip { background: #64748b; }
     .btn-generate { background: var(--cat4); }
+    .btn-copy { background: #3b82f6; }
     .cpc-section { margin-top: 24px; padding: 20px; background: #f8fafc; border-radius: 20px; border: 2px dashed #cbd5e1; }
     .cpc-card-preview { padding: 24px; border-radius: 16px; position: relative; overflow: hidden; margin: 16px 0; text-align: left; box-shadow: 0 12px 32px rgba(0,0,0,0.2); color: white; }
     .cpc-card-preview.cat4 { background: linear-gradient(135deg, #1e40af, #3b82f6); }
@@ -51,7 +59,9 @@
     @media (max-width: 480px) { .form-row { grid-template-columns: 1fr; } }
     .error-box { background: #fee2e2; color: #991b1b; padding: 12px; border-radius: 10px; margin-top: 12px; font-size: 13px; }
     .success-box { background: #d1fae5; color: #065f46; padding: 12px; border-radius: 10px; margin-top: 12px; font-size: 13px; }
-    .code-display { background: #1e293b; color: #10b981; padding: 16px; border-radius: 12px; font-family: monospace; font-size: 18px; margin: 12px 0; }
+    .code-display { background: #1e293b; color: #10b981; padding: 16px; border-radius: 12px; font-family: monospace; font-size: 18px; margin: 12px 0; cursor: pointer; }
+    .code-display:hover { background: #0f172a; }
+    .debug-box { background: #fef3c7; color: #92400e; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 11px; font-family: monospace; text-align: left; max-height: 200px; overflow-y: auto; }
   </style>
 <base target="_blank">
 </head>
@@ -104,11 +114,13 @@
         </div>
 
         <div class="feature-list" id="featureList"></div>
-        <div class="code-display" id="codeDisplay"></div>
+        <div class="code-display" id="codeDisplay" onclick="copyCode()" title="Click to copy">Your Code: <span id="codeText">CODE</span></div>
+        <button class="btn btn-copy" onclick="copyCode()" style="margin-top: 8px;">📋 Copy Code</button>
       </div>
 
       <div id="errorBox" class="error-box hidden"></div>
       <div id="successBox" class="success-box hidden"></div>
+      <div id="debugBox" class="debug-box hidden"></div>
 
       <button id="activateBtn" class="btn btn-activate hidden" onclick="activateCPC()">🚀 Activate & Send Email</button>
     </div>
@@ -116,10 +128,21 @@
 </div>
 
 <script>
-  // ─── Load order info from URL / session ───
+  // ─── Debug logger ───
+  function log(msg) {
+    console.log('[CPC]', msg);
+    const box = document.getElementById('debugBox');
+    if (box) {
+      box.classList.remove('hidden');
+      box.innerHTML += msg + '<br>';
+    }
+  }
+
+  // Load order info
   const params = new URLSearchParams(window.location.search);
   const orderId = params.get('order') || sessionStorage.getItem('orderId') || 'YAF-' + Date.now();
   document.getElementById('orderId').innerText = orderId;
+  log('Order ID: ' + orderId);
 
   const customerName = sessionStorage.getItem('vc_customer_name') || '';
   const customerEmail = sessionStorage.getItem('vc_customer_email') || '';
@@ -133,18 +156,17 @@
   document.getElementById('cPhone').value = customerPhone;
   document.getElementById('cAddress').value = customerAddress;
 
+  log('Loaded from session: name=' + customerName + ', email=' + customerEmail + ', total=' + orderTotal);
+
   let generatedCode = '';
   let currentCategory = 4;
   let qrUrl = '';
-  let emailFeaturesHtml = '';
-  let cardBgStyle = '';
-  let categoryLabel = '';
 
   const CATEGORY_CONFIG = {
-    4: { color: '#2563eb', label: 'Blue Starter', gradient: 'linear-gradient(135deg, #1e40af, #3b82f6)', footer: 'First-time shopper • Free delivery on R50+' },
-    3: { color: '#10b981', label: 'Green Smart', gradient: 'linear-gradient(135deg, #047857, #10b981)', footer: '5+ days • Smart Deals unlocked' },
-    2: { color: '#8b5cf6', label: 'Purple Half-Mega', gradient: 'linear-gradient(135deg, #6d28d9, #8b5cf6)', footer: '10+ days • Points & Spin & Win' },
-    1: { color: '#f59e0b', label: 'Gold Full-Mega', gradient: 'linear-gradient(135deg, #b45309, #f59e0b)', footer: '20+ days • All perks + Credit' },
+    4: { label: 'Blue Starter', footer: 'First-time shopper • Free delivery on R50+' },
+    3: { label: 'Green Smart', footer: '5+ days • Smart Deals unlocked' },
+    2: { label: 'Purple Half-Mega', footer: '10+ days • Points & Spin & Win' },
+    1: { label: 'Gold Full-Mega', footer: '20+ days • All perks + Credit' },
   };
 
   function determineCategory(count, total) {
@@ -165,44 +187,45 @@
       4: [
         { text: 'Free delivery on orders > R50', ok: true },
         { text: 'Buy 10 Get 2 Free', ok: false },
-        { text: 'Bulk discounts (10%/20%/30%/40%)', ok: false },
+        { text: 'Bulk discounts', ok: false },
         { text: 'Cash on Delivery', ok: false },
         { text: 'Points & Rewards', ok: false },
-        { text: 'Spin & Win (Tue/Fri)', ok: false },
-        { text: 'Buy on Credit (R20)', ok: false },
+        { text: 'Spin & Win', ok: false },
+        { text: 'Credit (R20)', ok: false },
       ],
       3: [
         { text: 'Free delivery on orders > R50', ok: true },
         { text: 'Buy 10 Get 2 Free', ok: true },
-        { text: 'Bulk discounts (10%/20%/30%/40%)', ok: true },
+        { text: 'Bulk discounts', ok: true },
         { text: 'Cash on Delivery', ok: false },
         { text: 'Points & Rewards', ok: false },
-        { text: 'Spin & Win (Tue/Fri)', ok: false },
-        { text: 'Buy on Credit (R20)', ok: false },
+        { text: 'Spin & Win', ok: false },
+        { text: 'Credit (R20)', ok: false },
       ],
       2: [
         { text: 'Free delivery on orders > R50', ok: true },
         { text: 'Buy 10 Get 2 Free', ok: true },
-        { text: 'Bulk discounts (10%/20%/30%/40%)', ok: true },
+        { text: 'Bulk discounts', ok: true },
         { text: 'Cash on Delivery', ok: false },
         { text: 'Points & Rewards (10 pts/order)', ok: true },
         { text: 'Spin & Win (Tue/Fri)', ok: true },
-        { text: 'Buy on Credit (R20)', ok: false },
+        { text: 'Credit (R20)', ok: false },
       ],
       1: [
         { text: 'Free delivery on orders > R50', ok: true },
         { text: 'Buy 10 Get 2 Free', ok: true },
-        { text: 'Bulk discounts (10%/20%/30%/40%)', ok: true },
+        { text: 'Bulk discounts', ok: true },
         { text: 'Cash on Delivery (< R100)', ok: true },
         { text: 'Points & Rewards (10 pts/order)', ok: true },
         { text: 'Spin & Win (Tue/Fri)', ok: true },
-        { text: 'Buy on Credit (R20)', ok: true },
+        { text: 'Credit (R20)', ok: true },
       ],
     };
     return features[cat] || features[4];
   }
 
   function startCPC() {
+    log('startCPC() called');
     document.getElementById('cpcAsk').classList.add('hidden');
     document.getElementById('cpcForm').classList.remove('hidden');
     document.getElementById('cpcForm').classList.add('fade-in');
@@ -211,15 +234,15 @@
     currentCategory = determineCategory(purchaseCount, orderTotal);
     generatedCode = generateCode(name, currentCategory);
 
+    log('Generated code: ' + generatedCode + ' | Category: ' + currentCategory);
+
     const config = CATEGORY_CONFIG[currentCategory];
-    cardBgStyle = config.gradient;
-    categoryLabel = config.label;
 
     document.getElementById('cardName').innerText = name;
     document.getElementById('cardCode').innerText = generatedCode;
     document.getElementById('catBadge').innerText = 'CAT ' + currentCategory;
     document.getElementById('cardFooter').innerText = config.footer;
-    document.getElementById('codeDisplay').innerText = 'Your Code: ' + generatedCode;
+    document.getElementById('codeText').innerText = generatedCode;
 
     const cardEl = document.getElementById('cpcCard');
     cardEl.className = 'cpc-card-preview cat' + currentCategory;
@@ -232,22 +255,15 @@
     qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + encodeURIComponent(generatedCode);
 
     const features = getFeatures(currentCategory);
-
-    // On-page feature list
     const list = document.getElementById('featureList');
     list.innerHTML = '<ul style="padding-left: 0; margin: 0;">' + 
       features.map(f => 
         '<li class="' + (f.ok ? 'yes' : 'no') + '">' + (f.ok ? '✓' : '✗') + ' ' + f.text + '</li>'
       ).join('') + '</ul>';
 
-    // Email feature list (HTML for EmailJS template)
-    emailFeaturesHtml = '<ul>' + 
-      features.map(f => 
-        '<li class="' + (f.ok ? 'yes' : 'no') + '">' + (f.ok ? '✓' : '✗') + ' ' + f.text + '</li>'
-      ).join('') + '</ul>';
-
     document.getElementById('cardPreview').classList.remove('hidden');
     document.getElementById('activateBtn').classList.remove('hidden');
+    log('Card preview ready');
   }
 
   function skipCPC() {
@@ -256,18 +272,27 @@
   }
 
   function showError(msg) {
+    log('ERROR: ' + msg);
     const box = document.getElementById('errorBox');
     box.innerText = msg;
     box.classList.remove('hidden');
   }
 
   function showSuccess(msg) {
+    log('SUCCESS: ' + msg);
     const box = document.getElementById('successBox');
     box.innerText = msg;
     box.classList.remove('hidden');
   }
 
+  function copyCode() {
+    navigator.clipboard.writeText(generatedCode).then(() => {
+      alert('Code copied: ' + generatedCode);
+    });
+  }
+
   async function activateCPC() {
+    log('activateCPC() called');
     const btn = document.getElementById('activateBtn');
     btn.innerText = '⏳ Activating...';
     btn.disabled = true;
@@ -285,8 +310,11 @@
       return;
     }
 
+    log('Name: ' + name + ' | Email: ' + email + ' | Phone: ' + phone);
+
     // Save to API
     try {
+      log('Calling /api/cpc/activate...');
       const res = await fetch('/api/cpc/activate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -300,14 +328,15 @@
           total_orders: purchaseCount
         })
       });
+      log('API response status: ' + res.status);
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        console.warn('API warning:', errData.error || res.status);
+        log('API warning: ' + (errData.error || res.status));
       } else {
         showSuccess('✅ Card saved to database!');
       }
     } catch (e) {
-      console.warn('API save failed (non-critical):', e.message);
+      log('API save failed (non-critical): ' + e.message);
     }
 
     // Save locally
@@ -316,50 +345,50 @@
     localStorage.setItem('vc_cpc_name', name);
 
     // ─── Send Email via EmailJS ───
-    // These variables MUST match your EmailJS template exactly!
+    log('Preparing EmailJS send...');
+
     const emailData = {
-      // Basic info
-      name: name,
       to_email: email,
-      email: email,
+      name: name,
       phone: phone || 'Not provided',
       total: 'R ' + orderTotal.toFixed(2),
-
-      // Order info
       orderId: orderId,
-      orderNotes: 'Cash Pass Code generated after order delivery. Category ' + currentCategory + ' (' + categoryLabel + ')',
-      communication: 'Email & WhatsApp',
-
-      // Card info
+      orderNotes: 'CPC Category ' + currentCategory + ' generated after delivery',
+      communication: 'Email',
       cardCode: generatedCode,
       cardExpiry: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
-
-      // Category info (NEW for universal template)
-      categoryNumber: currentCategory,
-      categoryLabel: categoryLabel,
-      cardBgStyle: cardBgStyle,
-      featuresHtml: emailFeaturesHtml,
-
-      // Images
       qrImageUrl: qrUrl,
       cardImage: qrUrl
     };
 
+    log('EmailJS payload: ' + JSON.stringify(emailData));
+    log('emailjs object exists: ' + (typeof emailjs !== 'undefined'));
+
+    if (typeof emailjs === 'undefined') {
+      showError('EmailJS library not loaded! Check your internet connection.');
+      btn.innerText = '🚀 Activate & Send Email';
+      btn.disabled = false;
+      return;
+    }
+
     emailjs.send("service_jzaw89k", "template_1ye4uyq", emailData)
-      .then(function() {
-        showSuccess('✅ Email sent to ' + email + '! Check your inbox (and spam folder).');
+      .then(function(response) {
+        log('EmailJS SUCCESS: ' + JSON.stringify(response));
+        showSuccess('✅ Email sent to ' + email + '! Check inbox & spam folder.');
         btn.innerText = '✅ Activated!';
         downloadCardImage();
       })
       .catch(function(err) {
-        console.error('EmailJS error:', err);
-        showError('Email failed, but your card is saved! Code: ' + generatedCode);
+        log('EmailJS FAILED: ' + JSON.stringify(err));
+        console.error('Full EmailJS error:', err);
+        showError('Email failed. Your code is saved: ' + generatedCode + ' (Copy it above!)');
         btn.innerText = '🚀 Activate & Send Email';
         btn.disabled = false;
       });
   }
 
   function downloadCardImage() {
+    log('Downloading card image...');
     const cardEl = document.getElementById('cpcCard');
     const qrEl = document.querySelector('.qr-wrapper');
 
@@ -389,10 +418,11 @@
         link.download = 'CPC_Card_' + generatedCode + '.png';
         link.href = canvas.toDataURL('image/png');
         link.click();
+        log('Card image downloaded');
       })
       .catch(err => {
         if (document.body.contains(wrapper)) document.body.removeChild(wrapper);
-        console.error('Download failed:', err);
+        log('Download failed: ' + err.message);
       });
   }
 </script>
