@@ -6,42 +6,47 @@ import { Clock, MapPin, Truck, Sparkles, Zap, Bot } from 'lucide-react';
 export default function HeroSection({
   dark, hotSale, featuredProducts, featuredIndex, setFeaturedIndex,
   hungerLevel, setHungerLevel, addToCart, getDiscountedPrice,
-  cartSubtotal, hasBulkPromo
+  cartSubtotal, hasBulkPromo, cpcCategory
 }) {
+  const showBulkPromo = hasBulkPromo && cpcCategory !== 4;
+  const showDiscountBanner = cartSubtotal > 200 && cpcCategory !== 4;
+  const showSmartDeals = cpcCategory !== 4;
+
   return (
     <>
-      {/* 🤖 AI Robot Promotions Banner */}
-      <div style={{
-        background: dark ? 'linear-gradient(135deg, #1e1b4b, #312e81)' : 'linear-gradient(135deg, #e0e7ff, #c7d2fe)',
-        borderRadius: 20, padding: '16px 20px', marginBottom: 16,
-        border: '1px solid ' + (dark ? 'rgba(99,102,241,0.3)' : 'rgba(99,102,241,0.2)'),
-        position: 'relative', overflow: 'hidden'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, position: 'relative', zIndex: 1 }}>
-          <div style={{
-            width: 44, height: 44, borderRadius: 14,
-            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 4px 12px rgba(99,102,241,0.3)', flexShrink: 0
-          }}>
-            <span style={{ fontSize: 24 }}>🤖</span>
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: dark ? '#c7d2fe' : '#3730a3', marginBottom: 4 }}>
-              🤖 Smart Deals Activated!
+      {/* 🤖 Smart Deals — Hidden for Cat 4 */}
+      {showSmartDeals && (
+        <div style={{
+          background: dark ? 'linear-gradient(135deg, #1e1b4b, #312e81)' : 'linear-gradient(135deg, #e0e7ff, #c7d2fe)',
+          borderRadius: 20, padding: '16px 20px', marginBottom: 16,
+          border: '1px solid ' + (dark ? 'rgba(99,102,241,0.3)' : 'rgba(99,102,241,0.2)'),
+          position: 'relative', overflow: 'hidden'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, position: 'relative', zIndex: 1 }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: 14,
+              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(99,102,241,0.3)', flexShrink: 0
+            }}>
+              <span style={{ fontSize: 24 }}>🤖</span>
             </div>
-            <div style={{ fontSize: 12, color: dark ? '#a5b4fc' : '#4338ca', lineHeight: 1.5 }}>
-              Buy 10 of any item → Get 2 FREE! • Orders over R200 get 10% OFF!
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: dark ? '#c7d2fe' : '#3730a3', marginBottom: 4 }}>
+                🤖 Smart Deals Activated!
+              </div>
+              <div style={{ fontSize: 12, color: dark ? '#a5b4fc' : '#4338ca', lineHeight: 1.5 }}>
+                Buy 10 of any item → Get 2 FREE! • Orders over R200 get 10% OFF!
+              </div>
             </div>
           </div>
+          <div style={{ position: 'absolute', top: -10, right: 20, fontSize: 20, opacity: 0.3 }}>✨</div>
+          <div style={{ position: 'absolute', bottom: -5, left: 60, fontSize: 16, opacity: 0.2 }}>⭐</div>
         </div>
-        {/* Decorative sparkles */}
-        <div style={{ position: 'absolute', top: -10, right: 20, fontSize: 20, opacity: 0.3 }}>✨</div>
-        <div style={{ position: 'absolute', bottom: -5, left: 60, fontSize: 16, opacity: 0.2 }}>⭐</div>
-      </div>
+      )}
 
-      {/* Hot Sale Banner */}
-      {hotSale?.active && (
+      {/* Hot Sale Banner — Hidden for Cat 4 */}
+      {hotSale?.active && cpcCategory !== 4 && (
         <div style={{
           background: 'linear-gradient(90deg, #7c2d12, #c2410c, #ea580c)',
           padding: '14px 20px', borderRadius: 16, marginBottom: 16,
@@ -80,11 +85,7 @@ export default function HeroSection({
         </div>
         <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginTop: 16 }}>
           {[0,1,2].map(i => (
-            <button key={i} style={{
-              height: 6, borderRadius: 3, border: 'none', cursor: 'pointer',
-              background: i === 0 ? '#fff' : 'rgba(255,255,255,0.4)',
-              transition: 'all 0.3s', width: i === 0 ? 24 : 6
-            }} />
+            <button key={i} style={{ height: 6, borderRadius: 3, border: 'none', cursor: 'pointer', background: i === 0 ? '#fff' : 'rgba(255,255,255,0.4)', transition: 'all 0.3s', width: i === 0 ? 24 : 6 }} />
           ))}
         </div>
       </div>
@@ -96,11 +97,7 @@ export default function HeroSection({
         borderRadius: 30, textAlign: 'center'
       }}>
         <span style={{ color: dark ? '#fff' : '#0f172a', fontWeight: 600 }}>🍔 How hungry? </span>
-        <input
-          type="range" min="0" max="100" value={hungerLevel}
-          onChange={(e) => setHungerLevel(parseInt(e.target.value))}
-          style={{ width: '100%', margin: '10px 0', cursor: 'pointer', accentColor: '#ff9800' }}
-        />
+        <input type="range" min="0" max="100" value={hungerLevel} onChange={(e) => setHungerLevel(parseInt(e.target.value))} style={{ width: '100%', margin: '10px 0', cursor: 'pointer', accentColor: '#ff9800' }} />
         <span style={{ color: dark ? '#fff' : '#0f172a', fontWeight: 600, display: 'inline-block', marginTop: 8 }}>
           {hungerLevel < 30 ? '🥱 not very hungry' : hungerLevel < 70 ? '😋 medium hungry' : '🤯 STARVING! order fast!'}
         </span>
@@ -122,8 +119,8 @@ export default function HeroSection({
         </div>
       </div>
 
-      {/* 🤖 Bulk Promo Banner (if items in cart qualify) */}
-      {hasBulkPromo && (
+      {/* Bulk Promo Banner — Cat 3+ only */}
+      {showBulkPromo && (
         <div style={{
           background: 'linear-gradient(135deg, #10b981, #059669, #047857)',
           borderRadius: 20, padding: '14px 18px', marginBottom: 20,
@@ -139,8 +136,8 @@ export default function HeroSection({
         </div>
       )}
 
-      {/* 💰 R200+ Discount Banner */}
-      {cartSubtotal > 200 && (
+      {/* R200+ Discount Banner — Cat 3+ only */}
+      {showDiscountBanner && (
         <div style={{
           background: 'linear-gradient(135deg, #7c3aed, #a855f7, #ec4899)',
           borderRadius: 20, padding: '14px 18px', marginBottom: 20,
@@ -178,29 +175,16 @@ export default function HeroSection({
               <span style={{ fontSize: 22, fontWeight: 800 }}>
                 R{getDiscountedPrice(featuredProducts[featuredIndex]?.id, featuredProducts[featuredIndex]?.price).toFixed(2)}
               </span>
-              <button
-                onClick={() => addToCart(featuredProducts[featuredIndex]?.id)}
-                style={{
-                  padding: '10px 20px', borderRadius: 20, border: 'none',
-                  background: '#fff', color: '#7c3aed', fontWeight: 700,
-                  fontSize: 13, cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                }}
-              >
-                Add to Cart
-              </button>
+              <button onClick={() => addToCart(featuredProducts[featuredIndex]?.id)} style={{
+                padding: '10px 20px', borderRadius: 20, border: 'none',
+                background: '#fff', color: '#7c3aed', fontWeight: 700,
+                fontSize: 13, cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+              }}>Add to Cart</button>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginTop: 16 }}>
             {featuredProducts.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setFeaturedIndex(i)}
-                style={{
-                  height: 6, borderRadius: 3, border: 'none', cursor: 'pointer',
-                  background: i === featuredIndex ? '#fff' : 'rgba(255,255,255,0.4)',
-                  transition: 'all 0.3s', width: i === featuredIndex ? 24 : 6
-                }}
-              />
+              <button key={i} onClick={() => setFeaturedIndex(i)} style={{ height: 6, borderRadius: 3, border: 'none', cursor: 'pointer', background: i === featuredIndex ? '#fff' : 'rgba(255,255,255,0.4)', transition: 'all 0.3s', width: i === featuredIndex ? 24 : 6 }} />
             ))}
           </div>
         </div>
