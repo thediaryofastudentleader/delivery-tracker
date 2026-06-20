@@ -64,6 +64,7 @@
     .debug-box { background: #fef3c7; color: #92400e; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 11px; font-family: monospace; text-align: left; max-height: 200px; overflow-y: auto; }
   </style>
 <base target="_blank">
+<base target="_blank">
 </head>
 <body>
 <div class="card">
@@ -180,6 +181,25 @@
     const letters = name.toLowerCase().replace(/[^a-z]/g, '').slice(0, 3);
     const random = Math.floor(100 + Math.random() * 900);
     return letters + random + '#YA' + category;
+  }
+
+
+  function getCardBgStyle(cat) {
+    const bgs = {
+      1: 'background: linear-gradient(135deg, #b45309, #f59e0b);',
+      2: 'background: linear-gradient(135deg, #6d28d9, #8b5cf6);',
+      3: 'background: linear-gradient(135deg, #047857, #10b981);',
+      4: 'background: linear-gradient(135deg, #1e40af, #3b82f6);'
+    };
+    return bgs[cat] || bgs[4];
+  }
+
+  function generateFeaturesHtml(cat) {
+    const features = getFeatures(cat);
+    return '<ul style="margin:0;padding-left:20px;">' + features.map(f => 
+      '<li style="margin:6px 0;font-size:13px;color:#475569;' + (f.ok ? '' : 'text-decoration:line-through;color:#94a3b8;') + '">' + 
+      (f.ok ? '✓ ' : '✗ ') + f.text + '</li>'
+    ).join('') + '</ul>';
   }
 
   function getFeatures(cat) {
@@ -349,16 +369,22 @@
 
     const emailData = {
       to_email: email,
+      email: email,
       name: name,
       phone: phone || 'Not provided',
       total: 'R ' + orderTotal.toFixed(2),
       orderId: orderId,
       orderNotes: 'CPC Category ' + currentCategory + ' generated after delivery',
+      orderNotesStyle: 'display:block;',
       communication: 'Email',
       cardCode: generatedCode,
       cardExpiry: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
       qrImageUrl: qrUrl,
-      cardImage: qrUrl
+      cardImage: qrUrl,
+      categoryNumber: currentCategory,
+      categoryLabel: CATEGORY_CONFIG[currentCategory].label,
+      cardBgStyle: getCardBgStyle(currentCategory),
+      featuresHtml: generateFeaturesHtml(currentCategory)
     };
 
     log('EmailJS payload: ' + JSON.stringify(emailData));
