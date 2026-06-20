@@ -79,8 +79,13 @@ export default function TrackerClient() {
         if (prevStatusRef.current && prevStatusRef.current !== payload.new.status) {
           const step = STATUS_STEPS.find(s => s.id === payload.new.status);
           if (step) showToastMsg(`📦 ${step.label} — ${step.description}`);
-          if (payload.new.status === 'delivered') showToastMsg('🎉 Order delivered! Enjoy your meal!', 'success');
-        }
+          if (payload.new.status === 'delivered') {
+  showToastMsg('🎉 Order delivered! Enjoy your meal!', 'success');
+  setTimeout(() => {
+    window.location.href = `/thankyou-cpc.html?order=${payload.new.order_id}`;
+   }, 2000);
+      }
+    }
         prevStatusRef.current = payload.new.status;
       })
       .subscribe();
