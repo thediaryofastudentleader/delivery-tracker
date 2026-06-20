@@ -7,7 +7,8 @@ import {
   CheckCircle2, Phone, ChevronRight, LogOut, Loader2,
   ToggleLeft, ToggleRight, Flame, Percent, Timer,
   Star, X, Check, MessageCircle, Send, CheckCheck,
-  ShoppingBag, Settings, BarChart3, Eye, DollarSign, Gem
+  ShoppingBag, Settings, BarChart3, Eye, DollarSign, Gem,
+  FileText, AlertTriangle, Ban
 } from 'lucide-react';
 import { getSupabase } from '@/lib/supabaseClient';
 
@@ -50,7 +51,7 @@ export default function AdminPage() {
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef(null);
 
-  // 💎 CPC & Points states
+  // CPC & Points states
   const [cpcList, setCpcList] = useState([]);
   const [loadingCPC, setLoadingCPC] = useState(false);
   const [selectedCPC, setSelectedCPC] = useState(null);
@@ -58,6 +59,10 @@ export default function AdminPage() {
   const [cashChangeOrder, setCashChangeOrder] = useState(null);
   const [cashChangeAmount, setCashChangeAmount] = useState(0);
   const [cashChangeStored, setCashChangeStored] = useState(false);
+
+  // Payment verification modal
+  const [verifyOrder, setVerifyOrder] = useState(null);
+  const [proofData, setProofData] = useState(null);
 
   useEffect(() => {
     setMounted(true);
@@ -185,6 +190,16 @@ export default function AdminPage() {
 
   const updateStatus = async (orderId, newStatus) => {
     if (!supabase) { alert('Status update unavailable'); return; }
+
+    // 💎 CHECK: If moving to 'preparing' or beyond, ensure payment is verified for online orders > R50
+    const order = orders.find(o => o.order_id === orderId);
+    if (order && order.total > 50 && ['EFT / PayShap', 'Online Payment', 'Scan to Pay'].includes(order.payment_method)) {
+      if (!order.paid && !order.payment_verified && newStatus !== 'order_received' && newStatus !== 'cancelled') {
+        alert('🛡️ STOP: Payment not verified for this order. Seller must see payment notification or approve proof of payment before proceeding.');
+        return;
+      }
+    }
+
     const { data: existing } = await supabase.from('orders').select('status_history').eq('order_id', orderId).single();
     const newHistory = [...(existing?.status_history || []), { status: newStatus, time: new Date().toISOString() }];
     await supabase.from('orders').update({ status: newStatus, status_history: newHistory, updated_at: new Date().toISOString() }).eq('order_id', orderId);
@@ -197,14 +212,42 @@ export default function AdminPage() {
         });
       }
     }
+    // If delivered, redirect customer to thankyou page (they'll see it on next tracker load)
+    fetchOrders();
+  };
+
+  // 💎 VIEW PROOF OF PAYMENT
+  const viewProof = async (order) => {
+    if (!supabase) return;
+    setVerifyOrder(order);
+    const { data } = await supabase.from('proof_of_payments').select('*').eq('order_id', order.order_id).single();
+    setProofData(data || null);
+  };
+
+  // 💎 SELLER SAW PAYMENT NOTIFICATION
+  const markSellerSaw = async (orderId) => {
+    if (!supabase) return;
+    await supabase.from('orders').update({ seller_saw_notification: true }).eq('order_id', orderId);
     fetchOrders();
   };
 
   // 💎 APPROVE PAYMENT
   const approvePayment = async (orderId) => {
     if (!supabase) return;
-    await supabase.from('orders').update({ paid: true, payment_status: 'approved' }).eq('order_id', orderId);
+    await supabase.from('orders').update({ paid: true, payment_status: 'approved', payment_verified: true, payment_verified_at: new Date().toISOString() }).eq('order_id', orderId);
     await supabase.from('proof_of_payments').update({ status: 'approved', reviewed_at: new Date().toISOString() }).eq('order_id', orderId);
+    setVerifyOrder(null);
+    setProofData(null);
+    fetchOrders();
+  };
+
+  // 💎 REJECT PAYMENT
+  const rejectPayment = async (orderId) => {
+    if (!supabase) return;
+    await supabase.from('proof_of_payments').update({ status: 'rejected', reviewed_at: new Date().toISOString() }).eq('order_id', orderId);
+    await supabase.from('orders').update({ payment_status: 'rejected' }).eq('order_id', orderId);
+    setVerifyOrder(null);
+    setProofData(null);
     fetchOrders();
   };
 
@@ -311,6 +354,9 @@ export default function AdminPage() {
                  onUpdateStatus={updateStatus}
                  onOpenChat={openChat}
                  onApprovePayment={approvePayment}
+                 onRejectPayment={rejectPayment}
+                 onViewProof={viewProof}
+                 onMarkSellerSaw={markSellerSaw}
                  onCashChange={(o) => { setCashChangeOrder(o); setCashChangeAmount(0); setCashChangeStored(false); }}
                />
              ))}
@@ -392,7 +438,7 @@ export default function AdminPage() {
                        <div style={{ background: '#374151', padding: '4px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600 }}>Cat {cpc.category}</div>
                      </div>
                      <div style={{ fontSize: 14, marginBottom: 4 }}>{cpc.customer_name}</div>
-                     <div style={{ fontSize: 12, color: '#9ca3af' }}>{cpc.phone} • {cpc.total_orders} orders</div>
+                     <div style={{ fontSize: 12, color: '#9ca3af' }}>{cpc.phone} • {cpc.total_orders} orders • {cpc.purchase_days || 0} days</div>
                    </div>
                  ))}
                </div>
@@ -408,6 +454,8 @@ export default function AdminPage() {
                   <div><span style={{ color: '#9ca3af' }}>Category:</span> {selectedCPC.category}</div>
                   <div><span style={{ color: '#9ca3af' }}>Phone:</span> {selectedCPC.phone}</div>
                   <div><span style={{ color: '#9ca3af' }}>Orders:</span> {selectedCPC.total_orders}</div>
+                  <div><span style={{ color: '#9ca3af' }}>Days:</span> {selectedCPC.purchase_days || 0}</div>
+                  <div><span style={{ color: '#9ca3af' }}>Credit:</span> R{selectedCPC.credit_used || 0} / R{selectedCPC.credit_limit || 0}</div>
                 </div>
                 {cpcPoints && (
                   <div style={{ background: '#0f172a', borderRadius: 12, padding: 16 }}>
@@ -476,6 +524,76 @@ export default function AdminPage() {
         </div>
       )}
 
+      {/* Payment Verification Modal */}
+      {verifyOrder && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)' }}>
+          <div style={{ background: '#1f2937', borderRadius: 24, padding: 24, maxWidth: 600, width: '100%', maxHeight: '90vh', overflow: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h3 style={{ margin: 0, fontSize: 18 }}>🛡️ Payment Verification</h3>
+              <button onClick={() => { setVerifyOrder(null); setProofData(null); }} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer' }}><X size={24} /></button>
+            </div>
+
+            <div style={{ background: '#0f172a', padding: 16, borderRadius: 12, marginBottom: 20 }}>
+              <div style={{ fontSize: 14, marginBottom: 8 }}><span style={{ color: '#9ca3af' }}>Order:</span> #{verifyOrder.order_id}</div>
+              <div style={{ fontSize: 14, marginBottom: 8 }}><span style={{ color: '#9ca3af' }}>Customer:</span> {verifyOrder.customer_name}</div>
+              <div style={{ fontSize: 14, marginBottom: 8 }}><span style={{ color: '#9ca3af' }}>Total:</span> <strong style={{ color: '#22c55e' }}>R{verifyOrder.total}</strong></div>
+              <div style={{ fontSize: 14 }}><span style={{ color: '#9ca3af' }}>Method:</span> {verifyOrder.payment_method}</div>
+            </div>
+
+            {/* Seller Saw Notification */}
+            <div style={{ background: verifyOrder.seller_saw_notification ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)', padding: 16, borderRadius: 12, marginBottom: 20, border: verifyOrder.seller_saw_notification ? '1px solid #10b981' : '1px solid #f59e0b' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                {verifyOrder.seller_saw_notification ? <CheckCircle2 size={20} color="#10b981" /> : <AlertTriangle size={20} color="#f59e0b" />}
+                <span style={{ fontWeight: 700, color: verifyOrder.seller_saw_notification ? '#10b981' : '#f59e0b' }}>
+                  {verifyOrder.seller_saw_notification ? 'Seller saw payment notification' : 'Seller has NOT seen payment notification'}
+                </span>
+              </div>
+              {!verifyOrder.seller_saw_notification && (
+                <button onClick={() => markSellerSaw(verifyOrder.order_id)} style={{ width: '100%', padding: 12, borderRadius: 10, border: 'none', background: '#f59e0b', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
+                  👁️ I Saw the Payment Notification on My Phone/Bank
+                </button>
+              )}
+            </div>
+
+            {/* Proof of Payment Viewer */}
+            {proofData && proofData.file_url ? (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 12, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Proof of Payment</div>
+                <div style={{ background: '#0f172a', borderRadius: 12, padding: 12, textAlign: 'center' }}>
+                  {proofData.file_type?.includes('pdf') ? (
+                    <a href={proofData.file_url} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 20 }}>
+                      <FileText size={24} /> Open PDF Document
+                    </a>
+                  ) : (
+                    <img src={proofData.file_url} alt="Proof of Payment" style={{ maxWidth: '100%', maxHeight: 400, borderRadius: 8, cursor: 'pointer' }} onClick={() => window.open(proofData.file_url, '_blank')} />
+                  )}
+                  <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 8 }}>{proofData.file_name || 'Uploaded file'}</p>
+                </div>
+              </div>
+            ) : (
+              <div style={{ background: 'rgba(239,68,68,0.15)', padding: 16, borderRadius: 12, marginBottom: 20, color: '#ef4444', fontSize: 13, fontWeight: 600 }}>
+                <Ban size={16} style={{ display: 'inline', marginRight: 6 }} /> No proof of payment uploaded yet. Process must STOP until customer uploads proof.
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => approvePayment(verifyOrder.order_id)} disabled={!verifyOrder.seller_saw_notification || !proofData?.file_url} style={{ flex: 1, padding: 14, borderRadius: 12, border: 'none', background: (!verifyOrder.seller_saw_notification || !proofData?.file_url) ? '#374151' : '#10b981', color: '#fff', fontWeight: 700, cursor: (!verifyOrder.seller_saw_notification || !proofData?.file_url) ? 'not-allowed' : 'pointer' }}>
+                ✓ Approve Payment & Order
+              </button>
+              <button onClick={() => rejectPayment(verifyOrder.order_id)} disabled={!proofData?.file_url} style={{ flex: 1, padding: 14, borderRadius: 12, border: '1px solid #ef4444', background: 'transparent', color: '#ef4444', fontWeight: 700, cursor: proofData?.file_url ? 'pointer' : 'not-allowed' }}>
+                ✗ Reject / Request New Proof
+              </button>
+            </div>
+            {(!verifyOrder.seller_saw_notification || !proofData?.file_url) && (
+              <p style={{ fontSize: 12, color: '#f59e0b', marginTop: 10, textAlign: 'center' }}>
+                ⚠️ Both conditions must be met: (1) Seller saw notification, (2) Proof uploaded
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Cash Change Modal */}
       {cashChangeOrder && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, background: 'rgba(0,0,0,0.7)' }}>
@@ -484,12 +602,7 @@ export default function AdminPage() {
             <p style={{ color: '#9ca3af', fontSize: 14, marginBottom: 16 }}>Order #{cashChangeOrder.order_id}</p>
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 6 }}>Change Amount (R)</label>
-              <input
-                type="number"
-                value={cashChangeAmount}
-                onChange={(e) => setCashChangeAmount(parseFloat(e.target.value) || 0)}
-                style={{ width: '100%', padding: 12, borderRadius: 10, border: '1px solid #374151', background: '#0f172a', color: '#fff' }}
-              />
+              <input type="number" value={cashChangeAmount} onChange={(e) => setCashChangeAmount(parseFloat(e.target.value) || 0)} style={{ width: '100%', padding: 12, borderRadius: 10, border: '1px solid #374151', background: '#0f172a', color: '#fff' }} />
             </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, cursor: 'pointer' }}>
               <input type="checkbox" checked={cashChangeStored} onChange={(e) => setCashChangeStored(e.target.checked)} style={{ width: 20, height: 20 }} />
@@ -506,24 +619,36 @@ export default function AdminPage() {
   );
 }
 
-function OrderCard({ order, onUpdateStatus, onOpenChat, onApprovePayment, onCashChange }) {
+function OrderCard({ order, onUpdateStatus, onOpenChat, onApprovePayment, onRejectPayment, onViewProof, onMarkSellerSaw, onCashChange }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const currentStatusInfo = STATUS_OPTIONS.find(s => s.value === order.status) || STATUS_OPTIONS[0];
   const StatusIcon = currentStatusInfo.icon;
 
+  // Payment status styling
+  const isOnlineOrder = order.total > 50 && ['EFT / PayShap', 'Online Payment', 'Scan to Pay'].includes(order.payment_method);
+  const paymentBlocked = isOnlineOrder && !order.paid && !order.payment_verified;
+
   return (
-    <div style={{ background: '#1f2937', borderRadius: '16px', padding: '20px', marginBottom: '16px', border: order.has_new_chat ? '1px solid #10b981' : '1px solid transparent', transition: 'all 0.15s' }}>
+    <div style={{ background: '#1f2937', borderRadius: '16px', padding: '20px', marginBottom: '16px', border: order.has_new_chat ? '1px solid #10b981' : (paymentBlocked ? '1px solid #f59e0b' : '1px solid transparent'), transition: 'all 0.15s' }}>
       <div onClick={() => setIsExpanded(!isExpanded)} style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {order.has_new_chat && <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ef4444', boxShadow: '0 0 8px #ef4444', flexShrink: 0 }} />}
+          {paymentBlocked && <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#f59e0b', boxShadow: '0 0 8px #f59e0b', flexShrink: 0 }} />}
           <div>
             <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 4 }}>#{order.order_id}</div>
             <div style={{ color: '#9ca3af', fontSize: 14 }}>{order.customer_name} • {order.phone}</div>
           </div>
         </div>
-        <span style={{ background: currentStatusInfo.bg, color: currentStatusInfo.color, padding: '6px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <StatusIcon size={14} /> {currentStatusInfo.label}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {paymentBlocked && (
+            <span style={{ background: 'rgba(245,158,11,0.2)', color: '#f59e0b', padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 }}>
+              ⏳ PAYMENT PENDING
+            </span>
+          )}
+          <span style={{ background: currentStatusInfo.bg, color: currentStatusInfo.color, padding: '6px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <StatusIcon size={14} /> {currentStatusInfo.label}
+          </span>
+        </div>
       </div>
 
       {isExpanded && (
@@ -534,50 +659,75 @@ function OrderCard({ order, onUpdateStatus, onOpenChat, onApprovePayment, onCash
             </button>
           </div>
 
-          {/* 💎 Payment & Proof of Payment */}
+          {/* Payment Section */}
           <div style={{ background: '#111827', padding: 16, borderRadius: 12, marginBottom: 16 }}>
-            <div style={{ fontSize: 12, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Payment</div>
+            <div style={{ fontSize: 12, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Payment Verification</div>
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13, marginBottom: 12 }}>
               <div><span style={{ color: '#9ca3af' }}>Method:</span> {order.payment_method}</div>
               <div><span style={{ color: '#9ca3af' }}>Status:</span> <span style={{ color: order.paid ? '#22c55e' : '#f59e0b', fontWeight: 600 }}>{order.paid ? 'Paid' : order.payment_status}</span></div>
               <div><span style={{ color: '#9ca3af' }}>Total:</span> <strong>R{order.total}</strong></div>
+              <div><span style={{ color: '#9ca3af' }}>Seller Saw:</span> <span style={{ color: order.seller_saw_notification ? '#22c55e' : '#ef4444' }}>{order.seller_saw_notification ? 'Yes' : 'No'}</span></div>
               {order.cash_pass_code && <div><span style={{ color: '#9ca3af' }}>CPC:</span> <span style={{ color: '#3b82f6' }}>{order.cash_pass_code}</span></div>}
             </div>
-            {order.proof_of_payment_url && (
-              <div style={{ marginBottom: 12 }}>
-                <a href={order.proof_of_payment_url} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Eye size={16} /> View Proof of Payment
-                </a>
-                {order.payment_status === 'proof_uploaded' && (
-                  <button onClick={() => onApprovePayment(order.order_id)} style={{ marginTop: 8, padding: '8px 16px', borderRadius: 8, border: 'none', background: '#10b981', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                    ✓ Approve Payment
-                  </button>
-                )}
+
+            {isOnlineOrder && !order.paid && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                <button onClick={() => onViewProof(order)} style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', background: '#3b82f6', color: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <Eye size={14} /> View & Verify Payment
+                </button>
               </div>
             )}
+
             {order.cash_change_given && (
-              <div style={{ fontSize: 12, color: '#f59e0b', marginTop: 8 }}>
+              <div style={{ fontSize: 12, color: '#f59e0b', marginTop: 10 }}>
                 💰 Change: R{order.cash_change_amount} {order.cash_change_stored ? '(stored in CPC)' : '(given to customer)'}
               </div>
             )}
-            <button onClick={() => onCashChange(order)} style={{ marginTop: 8, padding: '8px 14px', borderRadius: 8, border: '1px solid #4b5563', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button onClick={() => onCashChange(order)} style={{ marginTop: 10, padding: '8px 14px', borderRadius: 8, border: '1px solid #4b5563', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
               <DollarSign size={14} /> Record Cash Change
             </button>
           </div>
 
+          {/* Status Update */}
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 12, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Update Status</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
               {STATUS_OPTIONS.map(opt => {
                 const OptIcon = opt.icon;
                 const isCurrent = order.status === opt.value;
+                const isBlocked = paymentBlocked && opt.value !== 'order_received' && opt.value !== 'cancelled';
                 return (
-                  <button key={opt.value} onClick={() => onUpdateStatus(order.order_id, opt.value)} disabled={isCurrent} style={{ padding: '8px 14px', background: isCurrent ? opt.color : '#374151', color: '#fff', borderRadius: 12, border: 'none', cursor: isCurrent ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, opacity: isCurrent ? 1 : 0.8 }}>
-                    <OptIcon size={14} /> {opt.label}
+                  <button 
+                    key={opt.value} 
+                    onClick={() => !isBlocked && onUpdateStatus(order.order_id, opt.value)} 
+                    disabled={isCurrent || isBlocked} 
+                    style={{ 
+                      padding: '8px 14px', 
+                      background: isBlocked ? '#7f1d1d' : (isCurrent ? opt.color : '#374151'), 
+                      color: '#fff', 
+                      borderRadius: 12, 
+                      border: 'none', 
+                      cursor: isCurrent || isBlocked ? 'not-allowed' : 'pointer', 
+                      fontSize: 12, 
+                      fontWeight: 600, 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 6, 
+                      opacity: isCurrent ? 1 : 0.8 
+                    }}
+                    title={isBlocked ? 'Payment must be verified first' : ''}
+                  >
+                    <OptIcon size={14} /> {opt.label} {isBlocked && '🔒'}
                   </button>
                 );
               })}
             </div>
+            {paymentBlocked && (
+              <p style={{ fontSize: 12, color: '#f59e0b', marginTop: 8 }}>
+                ⚠️ Status updates are blocked until payment is verified. Click "View & Verify Payment" above.
+              </p>
+            )}
           </div>
 
           <div style={{ background: '#111827', padding: 16, borderRadius: 12, fontSize: 14 }}>
