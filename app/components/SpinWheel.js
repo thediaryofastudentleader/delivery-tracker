@@ -38,7 +38,7 @@ export default function SpinWheel({ cpcCode, orderTotal, dark, onPrize, cpcCateg
       const weekStart = new Date(now);
       weekStart.setDate(now.getDate() - now.getDay());
       weekStart.setHours(0, 0, 0, 0);
-      const lastSpin = localStorage.getItem(`spin_${cpcCode}_${weekStart.toISOString().split('T')[0]}`);
+      const lastSpin = localStorage.getItem('spin_' + cpcCode + '_' + weekStart.toISOString().split('T')[0]);
       setAlreadySpun(!!lastSpin);
       setCanSpin(!lastSpin);
     };
@@ -60,7 +60,7 @@ export default function SpinWheel({ cpcCode, orderTotal, dark, onPrize, cpcCateg
       setCanSpin(false);
       const weekStart = new Date();
       weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-      localStorage.setItem(`spin_${cpcCode}_${weekStart.toISOString().split('T')[0]}`, 'true');
+      localStorage.setItem('spin_' + cpcCode + '_' + weekStart.toISOString().split('T')[0], 'true');
       if (onPrize) onPrize(PRIZES[prizeIndex]);
     }, 4000);
   };
@@ -83,6 +83,10 @@ export default function SpinWheel({ cpcCode, orderTotal, dark, onPrize, cpcCateg
     );
   }
 
+  // Build conic gradient string safely
+  const gradientStops = PRIZES.map((p, i) => p.color + ' ' + (i * 45) + 'deg ' + ((i + 1) * 45) + 'deg').join(', ');
+  const conicGradient = 'conic-gradient(from 0deg, ' + gradientStops + ')';
+
   return (
     <div style={{ marginBottom: 20 }}>
       <button onClick={() => setShowWheel(true)} disabled={!canSpin} style={{
@@ -100,9 +104,9 @@ export default function SpinWheel({ cpcCode, orderTotal, dark, onPrize, cpcCateg
             <div style={{ position: 'relative', width: 280, height: 280, margin: '0 auto 20px' }}>
               <div style={{
                 position: 'absolute', top: '50%', left: '50%',
-                transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+                transform: 'translate(-50%, -50%) rotate(' + rotation + 'deg)',
                 width: 260, height: 260, borderRadius: '50%',
-                background: `conic-gradient(from 0deg, ${PRIZES.map((p, i) => \`${p.color} \${i * 45}deg \${(i + 1) * 45}deg\`).join(', ')})`,
+                background: conicGradient,
                 transition: 'transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99)'
               }} />
               <div style={{ position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '12px solid transparent', borderRight: '12px solid transparent', borderTop: '20px solid #ef4444', zIndex: 10 }} />
