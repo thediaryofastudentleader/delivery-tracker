@@ -132,11 +132,7 @@
   // ─── Debug logger ───
   function log(msg) {
     console.log('[CPC]', msg);
-    const box = document.getElementById('debugBox');
-    if (box) {
-      box.classList.remove('hidden');
-      box.innerHTML += msg + '<br>';
-    }
+    // Debug info kept in console only - not shown to users
   }
 
   // Load order info
