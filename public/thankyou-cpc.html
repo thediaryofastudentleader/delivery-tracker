@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Order Delivered 🎉 | Young Agripreneurs</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  <script>
+    // Debug: log EmailJS init
+    console.log('EmailJS script loaded');
+    (function() {
+      try {
+        emailjs.init({ publicKey: "JgtLtbImFkKkMDJJR" });
+        console.log('✅ EmailJS initialized with publicKey');
+      } catch (e) {
+        console.error('❌ EmailJS init failed:', e);
+      }
+    })();
+  </script>
+  <style>
+    :root { --cat4: #2563eb; --cat3: #10b981; --cat2: #8b5cf6; --cat1: #f59e0b; }
+    body { font-family: 'Segoe UI', system-ui; background: linear-gradient(145deg, #d4fc79, #96e6a1); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px; margin: 0; }
+    .card { background: rgba(255,255,240,0.95); border-radius: 32px; padding: 30px; max-width: 520px; width: 100%; text-align: center; box-shadow: 0 20px 35px rgba(0,0,0,0.2); }
+    .order-id { background: #f1c40f; padding: 12px 20px; border-radius: 80px; font-family: monospace; font-weight: 700; display: inline-block; margin: 10px 0; }
+    .btn-group { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin: 20px 0; }
+    .btn { border: none; padding: 12px 24px; border-radius: 40px; text-decoration: none; color: white; font-weight: bold; cursor: pointer; font-size: 14px; transition: transform 0.15s; }
+    .btn:hover { transform: scale(1.05); }
+    .btn-wa { background: #25D366; }
+    .btn-home { background: #3498db; }
+    .btn-activate { background: linear-gradient(135deg, #10b981, #059669); font-size: 16px; padding: 16px 32px; }
+    .btn-skip { background: #64748b; }
+    .btn-generate { background: var(--cat4); }
+    .btn-copy { background: #3b82f6; }
+    .cpc-section { margin-top: 24px; padding: 20px; background: #f8fafc; border-radius: 20px; border: 2px dashed #cbd5e1; }
+    .cpc-card-preview { padding: 24px; border-radius: 16px; position: relative; overflow: hidden; margin: 16px 0; text-align: left; box-shadow: 0 12px 32px rgba(0,0,0,0.2); color: white; }
+    .cpc-card-preview.cat4 { background: linear-gradient(135deg, #1e40af, #3b82f6); }
+    .cpc-card-preview.cat3 { background: linear-gradient(135deg, #047857, #10b981); }
+    .cpc-card-preview.cat2 { background: linear-gradient(135deg, #6d28d9, #8b5cf6); }
+    .cpc-card-preview.cat1 { background: linear-gradient(135deg, #b45309, #f59e0b); }
+    .cpc-card-preview::before { content: ''; position: absolute; top: -50%; right: -50%; width: 200%; height: 200%; background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px); background-size: 20px 20px; }
+    .cpc-content { position: relative; z-index: 1; }
+    .cpc-brand { font-weight: 700; font-size: 1.1rem; letter-spacing: 0.5px; }
+    .cpc-name { font-size: 1.4rem; font-weight: 700; margin: 12px 0; }
+    .cpc-code { background: rgba(255,255,255,0.2); padding: 10px 16px; border-radius: 8px; font-family: monospace; font-size: 1.2rem; font-weight: 700; letter-spacing: 2px; display: inline-block; }
+    .cpc-footer { font-size: 0.85rem; opacity: 0.8; margin-top: 12px; }
+    .cpc-category { position: absolute; top: 16px; right: 16px; background: rgba(255,255,255,0.25); padding: 6px 14px; border-radius: 20px; font-size: 0.8rem; font-weight: 700; }
+    .feature-list { text-align: left; margin: 16px 0; font-size: 13px; color: #475569; }
+    .feature-list li { margin-bottom: 6px; list-style: none; }
+    .feature-list .yes { color: #10b981; font-weight: 600; }
+    .feature-list .no { color: #ef4444; text-decoration: line-through; opacity: 0.6; }
+    .qr-wrapper { text-align: center; margin-top: 16px; padding: 12px; background: white; border-radius: 12px; display: inline-block; }
+    .hidden { display: none; }
+    .fade-in { animation: fadeIn 0.5s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 10px; margin: 8px 0; font-size: 14px; box-sizing: border-box; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media (max-width: 480px) { .form-row { grid-template-columns: 1fr; } }
+    .error-box { background: #fee2e2; color: #991b1b; padding: 12px; border-radius: 10px; margin-top: 12px; font-size: 13px; }
+    .success-box { background: #d1fae5; color: #065f46; padding: 12px; border-radius: 10px; margin-top: 12px; font-size: 13px; }
+    .code-display { background: #1e293b; color: #10b981; padding: 16px; border-radius: 12px; font-family: monospace; font-size: 18px; margin: 12px 0; cursor: pointer; }
+    .code-display:hover { background: #0f172a; }
+    .debug-box { background: #fef3c7; color: #92400e; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 11px; font-family: monospace; text-align: left; max-height: 200px; overflow-y: auto; }
+  </style>
+<base target="_blank">
+<base target="_blank">
+</head>
+<body>
+<div class="card">
+  <div style="font-size: 64px; margin-bottom: 8px;">🎉</div>
+  <h1 style="margin: 0 0 8px; font-size: 24px; color: #1a1a1a;">Order Delivered!</h1>
+  <p style="color: #64748b; margin: 0 0 12px;">Enjoy your munchies — thanks for backing young farmers!</p>
+  <div class="order-id">🆔 Order # <span id="orderId">YAF-xxxx</span></div>
+  <div class="btn-group">
+    <a href="https://wa.me/27639839104" class="btn btn-wa">📱 WhatsApp</a>
+    <a href="index.html" class="btn btn-home">🏠 Back to Shop</a>
+  </div>
+
+  <div id="cpcSection" class="cpc-section">
+    <h3 style="margin: 0 0 8px; color: #1e293b;">💎 Cash Pass Code</h3>
+    <p style="font-size: 13px; color: #64748b; margin: 0 0 16px;">Unlock rewards, points & exclusive perks</p>
+
+    <div id="cpcAsk">
+      <p style="font-weight: 600; color: #1e293b;">Would you like a free Cash Pass Code?</p>
+      <div class="btn-group" style="margin-top: 12px;">
+        <button class="btn btn-generate" onclick="startCPC()">✅ Yes, Generate My Card</button>
+        <button class="btn btn-skip" onclick="skipCPC()">❌ No Thanks</button>
+      </div>
+    </div>
+
+    <div id="cpcForm" class="hidden">
+      <p style="font-size: 13px; color: #64748b; margin-bottom: 12px;">Confirm your details — we'll link them to your card</p>
+      <div class="form-row">
+        <input type="text" id="cName" placeholder="Full Name" />
+        <input type="email" id="cEmail" placeholder="Email" />
+      </div>
+      <input type="tel" id="cPhone" placeholder="Phone Number" />
+      <input type="text" id="cAddress" placeholder="Residence & Room" />
+
+      <div id="cardPreview" class="hidden fade-in">
+        <div id="cpcCard" class="cpc-card-preview">
+          <div class="cpc-category" id="catBadge">CAT 4</div>
+          <div class="cpc-content">
+            <div class="cpc-brand">Young Agripreneurs</div>
+            <div style="font-size: 0.9rem; opacity: 0.9;">Cash Pass Code</div>
+            <div class="cpc-name" id="cardName">Name</div>
+            <div class="cpc-code" id="cardCode">CODE</div>
+          </div>
+          <div class="cpc-footer" id="cardFooter">First-time shopper • Free delivery on R50+</div>
+        </div>
+        <div class="qr-wrapper">
+          <div id="qrcode"></div>
+          <p style="margin: 8px 0 0; font-size: 12px; color: #64748b;">Scan at checkout</p>
+        </div>
+
+        <div class="feature-list" id="featureList"></div>
+        <div class="code-display" id="codeDisplay" onclick="copyCode()" title="Click to copy">Your Code: <span id="codeText">CODE</span></div>
+        <button class="btn btn-copy" onclick="copyCode()" style="margin-top: 8px;">📋 Copy Code</button>
+      </div>
+
+      <div id="errorBox" class="error-box hidden"></div>
+      <div id="successBox" class="success-box hidden"></div>
+      <div id="debugBox" class="debug-box hidden"></div>
+
+      <button id="activateBtn" class="btn btn-activate hidden" onclick="activateCPC()">🚀 Activate & Send Email</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ─── Debug logger ───
+  function log(msg) {
+    console.log('[CPC]', msg);
+    // Debug info kept in console only - not shown to users
+  }
+
+  // Load order info
+  const params = new URLSearchParams(window.location.search);
+  const orderId = params.get('order') || sessionStorage.getItem('orderId') || 'YAF-' + Date.now();
+  document.getElementById('orderId').innerText = orderId;
+  log('Order ID: ' + orderId);
+
+  const customerName = sessionStorage.getItem('vc_customer_name') || '';
+  const customerEmail = sessionStorage.getItem('vc_customer_email') || '';
+  const customerPhone = sessionStorage.getItem('vc_customer_phone') || '';
+  const customerAddress = sessionStorage.getItem('vc_customer_address') || '';
+  const orderTotal = parseFloat(sessionStorage.getItem('vc_order_total') || '0');
+  const purchaseCount = parseInt(sessionStorage.getItem('vc_purchase_count') || '1');
+
+  document.getElementById('cName').value = customerName;
+  document.getElementById('cEmail').value = customerEmail;
+  document.getElementById('cPhone').value = customerPhone;
+  document.getElementById('cAddress').value = customerAddress;
+
+  log('Loaded from session: name=' + customerName + ', email=' + customerEmail + ', total=' + orderTotal);
+
+  let generatedCode = '';
+  let currentCategory = 4;
+  let qrUrl = '';
+
+  const CATEGORY_CONFIG = {
+    4: { label: 'Blue Starter', footer: 'First-time shopper • Free delivery on R50+' },
+    3: { label: 'Green Smart', footer: '5+ days • Smart Deals unlocked' },
+    2: { label: 'Purple Half-Mega', footer: '10+ days • Points & Spin & Win' },
+    1: { label: 'Gold Full-Mega', footer: '20+ days • All perks + Credit' },
+  };
+
+  function determineCategory(count, total) {
+    if (count >= 20) return 1;
+    if (count >= 10) return 2;
+    if (count >= 5) return 3;
+    return 4;
+  }
+
+  function generateCode(name, category) {
+    const letters = name.toLowerCase().replace(/[^a-z]/g, '').slice(0, 3);
+    const random = Math.floor(100 + Math.random() * 900);
+    return letters + random + '#YA' + category;
+  }
+
+
+  function getCardBgStyle(cat) {
+    const bgs = {
+      1: 'background-color: #f59e0b;',
+      2: 'background-color: #8b5cf6;',
+      3: 'background-color: #10b981;',
+      4: 'background-color: #3b82f6;'
+    };
+    return bgs[cat] || bgs[4];
+  }
+
+  function generateFeaturesHtml(cat) {
+    const features = getFeatures(cat);
+    return '<ul style="margin:0;padding-left:20px;">' + features.map(f => 
+      '<li style="margin:6px 0;font-size:13px;color:#475569;' + (f.ok ? '' : 'text-decoration:line-through;color:#94a3b8;') + '">' + 
+      (f.ok ? '✓ ' : '✗ ') + f.text + '</li>'
+    ).join('') + '</ul>';
+  }
+
+  function getFeatures(cat) {
+    const features = {
+      4: [
+        { text: 'Free delivery on orders > R50', ok: true },
+        { text: 'Buy 10 Get 2 Free', ok: false },
+        { text: 'Bulk discounts', ok: false },
+        { text: 'Cash on Delivery', ok: false },
+        { text: 'Points & Rewards', ok: false },
+        { text: 'Spin & Win', ok: false },
+        { text: 'Credit (R20)', ok: false },
+      ],
+      3: [
+        { text: 'Free delivery on orders > R50', ok: true },
+        { text: 'Buy 10 Get 2 Free', ok: true },
+        { text: 'Bulk discounts', ok: true },
+        { text: 'Cash on Delivery', ok: false },
+        { text: 'Points & Rewards', ok: false },
+        { text: 'Spin & Win', ok: false },
+        { text: 'Credit (R20)', ok: false },
+      ],
+      2: [
+        { text: 'Free delivery on orders > R50', ok: true },
+        { text: 'Buy 10 Get 2 Free', ok: true },
+        { text: 'Bulk discounts', ok: true },
+        { text: 'Cash on Delivery', ok: false },
+        { text: 'Points & Rewards (10 pts/order)', ok: true },
+        { text: 'Spin & Win (Tue/Fri)', ok: true },
+        { text: 'Credit (R20)', ok: false },
+      ],
+      1: [
+        { text: 'Free delivery on orders > R50', ok: true },
+        { text: 'Buy 10 Get 2 Free', ok: true },
+        { text: 'Bulk discounts', ok: true },
+        { text: 'Cash on Delivery (< R100)', ok: true },
+        { text: 'Points & Rewards (10 pts/order)', ok: true },
+        { text: 'Spin & Win (Tue/Fri)', ok: true },
+        { text: 'Credit (R20)', ok: true },
+      ],
+    };
+    return features[cat] || features[4];
+  }
+
+  function startCPC() {
+    log('startCPC() called');
+    document.getElementById('cpcAsk').classList.add('hidden');
+    document.getElementById('cpcForm').classList.remove('hidden');
+    document.getElementById('cpcForm').classList.add('fade-in');
+
+    const name = document.getElementById('cName').value || 'Customer';
+    currentCategory = determineCategory(purchaseCount, orderTotal);
+    generatedCode = generateCode(name, currentCategory);
+
+    log('Generated code: ' + generatedCode + ' | Category: ' + currentCategory);
+
+    const config = CATEGORY_CONFIG[currentCategory];
+
+    document.getElementById('cardName').innerText = name;
+    document.getElementById('cardCode').innerText = generatedCode;
+    document.getElementById('catBadge').innerText = 'CAT ' + currentCategory;
+    document.getElementById('cardFooter').innerText = config.footer;
+    document.getElementById('codeText').innerText = generatedCode;
+
+    const cardEl = document.getElementById('cpcCard');
+    cardEl.className = 'cpc-card-preview cat' + currentCategory;
+
+    document.getElementById('qrcode').innerHTML = '';
+    new QRCode(document.getElementById('qrcode'), {
+      text: generatedCode, width: 120, height: 120,
+      colorDark: '#1e293b', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.H
+    });
+    qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + encodeURIComponent(generatedCode);
+
+    const features = getFeatures(currentCategory);
+    const list = document.getElementById('featureList');
+    list.innerHTML = '<ul style="padding-left: 0; margin: 0;">' + 
+      features.map(f => 
+        '<li class="' + (f.ok ? 'yes' : 'no') + '">' + (f.ok ? '✓' : '✗') + ' ' + f.text + '</li>'
+      ).join('') + '</ul>';
+
+    document.getElementById('cardPreview').classList.remove('hidden');
+    document.getElementById('activateBtn').classList.remove('hidden');
+    log('Card preview ready');
+  }
+
+  function skipCPC() {
+    document.getElementById('cpcSection').innerHTML = 
+      '<p style="color: #64748b; font-size: 14px;">👍 No problem! You can always get a Cash Pass Code later from your profile.</p>';
+  }
+
+  function showError(msg) {
+    log('ERROR: ' + msg);
+    const box = document.getElementById('errorBox');
+    box.innerText = msg;
+    box.classList.remove('hidden');
+  }
+
+  function showSuccess(msg) {
+    log('SUCCESS: ' + msg);
+    const box = document.getElementById('successBox');
+    box.innerText = msg;
+    box.classList.remove('hidden');
+  }
+
+  function copyCode() {
+    navigator.clipboard.writeText(generatedCode).then(() => {
+      alert('Code copied: ' + generatedCode);
+    });
+  }
+
+  async function activateCPC() {
+    log('activateCPC() called');
+    const btn = document.getElementById('activateBtn');
+    btn.innerText = '⏳ Activating...';
+    btn.disabled = true;
+    document.getElementById('errorBox').classList.add('hidden');
+    document.getElementById('successBox').classList.add('hidden');
+
+    const name = document.getElementById('cName').value.trim();
+    const email = document.getElementById('cEmail').value.trim();
+    const phone = document.getElementById('cPhone').value.trim();
+
+    if (!name || !email) {
+      showError('Please enter your name and email to activate.');
+      btn.innerText = '🚀 Activate & Send Email';
+      btn.disabled = false;
+      return;
+    }
+
+    log('Name: ' + name + ' | Email: ' + email + ' | Phone: ' + phone);
+
+    // Save to API
+    try {
+      log('Calling /api/cpc/activate...');
+      const res = await fetch('/api/cpc/activate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: generatedCode,
+          customer_name: name,
+          email: email,
+          phone: phone,
+          category: currentCategory,
+          order_id: orderId,
+          total_orders: purchaseCount
+        })
+      });
+      log('API response status: ' + res.status);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        log('API warning: ' + (errData.error || res.status));
+      } else {
+        showSuccess('✅ Card saved to database!');
+      }
+    } catch (e) {
+      log('API save failed (non-critical): ' + e.message);
+    }
+
+    // Save locally
+    localStorage.setItem('vc_cpc', generatedCode);
+    localStorage.setItem('vc_cpc_category', currentCategory);
+    localStorage.setItem('vc_cpc_name', name);
+
+    // ─── Send Email via EmailJS ───
+    log('Preparing EmailJS send...');
+
+    const emailData = {
+      to_email: email,
+      email: email,
+      name: name,
+      phone: phone || 'Not provided',
+      total: 'R ' + (Math.round(orderTotal * 100) / 100).toFixed(2),
+      orderId: orderId,
+      orderNotes: 'CPC Category ' + currentCategory + ' generated after delivery',
+      orderNotesStyle: 'display:block;',
+      communication: 'Email',
+      cardCode: generatedCode,
+      cardExpiry: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
+      qrImageUrl: qrUrl,
+      cardImage: qrUrl,
+      categoryNumber: currentCategory,
+      categoryLabel: CATEGORY_CONFIG[currentCategory].label,
+      cardBgStyle: getCardBgStyle(currentCategory),
+      featuresHtml: generateFeaturesHtml(currentCategory)
+    };
+
+    log('EmailJS payload: ' + JSON.stringify(emailData));
+    log('emailjs object exists: ' + (typeof emailjs !== 'undefined'));
+
+    if (typeof emailjs === 'undefined') {
+      showError('EmailJS library not loaded! Check your internet connection.');
+      btn.innerText = '🚀 Activate & Send Email';
+      btn.disabled = false;
+      return;
+    }
+
+    emailjs.send("service_jzaw89k", "template_1ye4uyq", emailData)
+      .then(function(response) {
+        log('EmailJS SUCCESS: ' + JSON.stringify(response));
+        showSuccess('✅ Email sent to ' + email + '! Check inbox & spam folder.');
+        btn.innerText = '✅ Activated!';
+        downloadCardImage();
+      })
+      .catch(function(err) {
+        log('EmailJS FAILED: ' + JSON.stringify(err));
+        console.error('Full EmailJS error:', err);
+        showError('Email failed. Your code is saved: ' + generatedCode + ' (Copy it above!)');
+        btn.innerText = '🚀 Activate & Send Email';
+        btn.disabled = false;
+      });
+  }
+
+  function downloadCardImage() {
+    log('Downloading card image...');
+    const cardEl = document.getElementById('cpcCard');
+    const qrEl = document.querySelector('.qr-wrapper');
+
+    const wrapper = document.createElement('div');
+    wrapper.style.position = 'absolute';
+    wrapper.style.left = '-9999px';
+    wrapper.style.padding = '20px';
+    wrapper.style.background = '#f4f4f6';
+    wrapper.style.borderRadius = '12px';
+    wrapper.style.display = 'flex';
+    wrapper.style.flexDirection = 'column';
+    wrapper.style.alignItems = 'center';
+    wrapper.style.gap = '20px';
+    wrapper.style.width = '400px';
+
+    const clonedCard = cardEl.cloneNode(true);
+    const clonedQr = qrEl.cloneNode(true);
+    clonedCard.style.opacity = '1';
+    wrapper.appendChild(clonedCard);
+    wrapper.appendChild(clonedQr);
+    document.body.appendChild(wrapper);
+
+    html2canvas(wrapper, { backgroundColor: '#f4f4f6', scale: 2, useCORS: true })
+      .then(canvas => {
+        document.body.removeChild(wrapper);
+        const link = document.createElement('a');
+        link.download = 'CPC_Card_' + generatedCode + '.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        log('Card image downloaded');
+      })
+      .catch(err => {
+        if (document.body.contains(wrapper)) document.body.removeChild(wrapper);
+        log('Download failed: ' + err.message);
+      });
+  }
+</script>
+</body>
+</html>
